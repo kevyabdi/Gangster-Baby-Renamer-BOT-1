@@ -36,7 +36,9 @@ async def _prepare_thumb(client: Client, user_id: int) -> str | None:
     # Download user's saved thumbnail (if any) and ensure it meets Telegram limits
     t_id = from io import BytesIO
     bio = BytesIO()
+    bio = BytesIO()
     await c.download_media(media, file_name=bio)
+    bio.name = new_filename
     bio.name = new_filename
         # convert to JPEG, <= 320px, <= 200KB
         im = Image.open(path).convert("RGB")
