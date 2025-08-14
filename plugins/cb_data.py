@@ -10,6 +10,7 @@ from PIL import Image
 TMP_DIR = "ren_tmp"
 os.makedirs(TMP_DIR, exist_ok=True)
 
+# --------- Helper Functions ---------
 def _safe_name(name: str) -> str:
     name = name.replace("\\", "/").split("/")[-1].strip()
     return name or "file"
@@ -32,75 +33,69 @@ async def _extract_meta(path: str):
 async def _prepare_thumb(client: Client, user_id: int):
     path = os.path.join(TMP_DIR, f"{user_id}_thumb.jpg")
     try:
-        th_msg = await client.download_media(await client.get_profile_photos(user_id, limit=1).next(), file_name=path)
-        im = Image.open(th_msg).convert("RGB")
-        im.thumbnail((320, 320))
-        im.save(path, "JPEG", quality=80, optimize=True)
-        return path
+        photos = await client.get_profile_photos(user_id, limit=1)
+        if photos.total_count > 0:
+            th_msg = await client.download_media(photos[0].file_id, file_name=path)
+            im = Image.open(th_msg).convert("RGB")
+            im.thumbnail((320, 320))
+            im.save(path, "JPEG", quality=80, optimize=True)
+            return path
     except Exception:
-        return None
-
-def _parse_new_name(from_text: str) -> str | None:
-    if not from_text:
-        return None
-    if "```" in from_text:
-        try:
-            seg = from_text.split("```", 1)[1]
-            return _safe_name(seg.split("```", 1)[0])
-        except Exception:
-            pass
-    key = "File Name"
-    if key in from_text:
-        after = from_text.split(key, 1)[1]
-        for sep in [":", "-", ":-"]:
-            if sep in after:
-                return _safe_name(after.split(sep, 1)[1].strip())
+        pass
     return None
 
-@Client.on_callback_query(filters.regex("^upload_(document|video|audio)$"))
-async def do_upload(client: Client, query):
-    kind = query.data.split("_", 1)[1]
-    msg = query.message
-    src = msg.reply_to_message
-    if not src:
-        return await msg.edit_text("❌ No source file found.")
+# --------- START RENAME handler ---------
+@Client.on_callback_query(filters.regex("^rename$"))
+async def start_rename(client, query):
+    await query.message.delete()
+    await client.send_message(
+        query.from_user.id,
+        "✏️ **Send me the new file name (with extension)**\nExample: `MyVideo.mp4`",
+        reply_markup=ForceReply(selective=True)
+    )
 
-    media = getattr(src, src.media.value) if src.media else None
-    if media is None:
-        return await msg.edit_text("❌ Unsupported media.")
+# --------- Receive New Name & Upload ---------
+@Client.on_message(filters.reply & filters.private)
+async def handle_new_name(client, message):
+    if not message.reply_to_message:
+        return
 
-    new_name = _parse_new_name(msg.text or msg.caption or "") or media.file_name or f"file.{('mp4' if kind=='video' else 'bin')}"
-    new_name = _safe_name(new_name)
+    src = message.reply_to_message.reply_to_message  # original media message
+    if not src or not src.media:
+        return await message.reply("❌ No source file found.")
 
-    status = await msg.edit_text("⚠️__**Please wait...**__\n__Downloading & Uploading file....__")
+    media = getattr(src, src.media.value)
+    new_name = _safe_name(message.text or media.file_name or "file.bin")
+
+    status = await message.reply("⚠️ **Please wait...**\nDownloading & Uploading file...")
     c_time = time.time()
     dl_path = os.path.join(TMP_DIR, new_name)
 
     await client.download_media(src, file_name=dl_path)
 
-    ph_path = await _prepare_thumb(client, msg.chat.id)
+    ph_path = await _prepare_thumb(client, message.chat.id)
     width = height = duration = None
-    if kind in ("video", "audio"):
+    if src.video or src.audio:
         w, h, d = await _extract_meta(dl_path)
         width, height, duration = w, h, d
 
     try:
-        if kind == "document":
+        if src.document:
             await client.send_document(
-                msg.chat.id, document=dl_path, caption=new_name, thumb=ph_path,
+                message.chat.id, document=dl_path, caption=new_name, thumb=ph_path,
                 progress=progress_for_pyrogram, progress_args=("Uploading...", status, c_time),
                 reply_to_message_id=src.id
             )
-        elif kind == "video":
+        elif src.video:
             await client.send_video(
-                msg.chat.id, video=dl_path, caption=new_name, thumb=ph_path,
+                message.chat.id, video=dl_path, caption=new_name, thumb=ph_path,
                 width=width, height=height, duration=duration, supports_streaming=True,
                 progress=progress_for_pyrogram, progress_args=("Uploading...", status, c_time),
                 reply_to_message_id=src.id
             )
-        else:
+        elif src.audio:
             await client.send_audio(
-                msg.chat.id, audio=dl_path, caption=new_name, thumb=ph_path, duration=duration,
+                message.chat.id, audio=dl_path, caption=new_name, thumb=ph_path, duration=duration,
                 progress=progress_for_pyrogram, progress_args=("Uploading...", status, c_time),
                 reply_to_message_id=src.id
             )
