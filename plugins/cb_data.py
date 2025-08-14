@@ -79,8 +79,17 @@ async def doc(bot,update):
              ph_path = None
      await ms.edit("⚠️__**Please wait...**__\n__Processing file upload....__")
      c_time = time.time() 
+     
+     # Check if file exists before upload
+     if not os.path.exists(file_path):
+         await ms.edit(f"❌ File not found: {file_path}")
+         return
+         
+     print(f"Starting upload - Type: {type}, File: {file_path}, Size: {os.path.getsize(file_path)}")
+     
      try:
         if type == "document":
+           print("Uploading as document...")
            await bot.send_document(
 		    update.message.chat.id,
                     document=file_path,
@@ -89,6 +98,7 @@ async def doc(bot,update):
                     progress=progress_for_pyrogram,
                     progress_args=( "⚠️__**Please wait...**__\n__Processing file upload....__",  ms, c_time   ))
         elif type == "video": 
+            print("Uploading as video...")
             await bot.send_video(
 		    update.message.chat.id,
 		    video=file_path,
@@ -98,6 +108,7 @@ async def doc(bot,update):
 		    progress=progress_for_pyrogram,
 		    progress_args=( "⚠️__**Please wait...**__\n__Processing file upload....__",  ms, c_time))
         elif type == "audio": 
+            print("Uploading as audio...")
             await bot.send_audio(
 		    update.message.chat.id,
 		    audio=file_path,
@@ -106,9 +117,12 @@ async def doc(bot,update):
 		    duration=duration,
 		    progress=progress_for_pyrogram,
 		    progress_args=( "⚠️__**Please wait...**__\n__Processing file upload....__",  ms, c_time   )) 
+        print("Upload completed successfully!")
      except Exception as e: 
-         await ms.edit(f"Upload Error: {str(e)}") 
+         error_msg = f"Upload Error: {str(e)}\n\nFile: {file_path}\nType: {type}\nSize: {os.path.getsize(file_path) if os.path.exists(file_path) else 'File not found'}"
+         await ms.edit(error_msg) 
          print(f"Upload failed: {e}")
+         print(f"Error details - File exists: {os.path.exists(file_path)}, Thumb exists: {ph_path and os.path.exists(ph_path) if ph_path else 'No thumb'}")
          if os.path.exists(file_path):
              os.remove(file_path)
          if ph_path and os.path.exists(ph_path):
