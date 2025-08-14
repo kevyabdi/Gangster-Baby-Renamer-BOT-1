@@ -34,12 +34,10 @@ async def _extract_meta(path: str):
 
 async def _prepare_thumb(client: Client, user_id: int) -> str | None:
     # Download user's saved thumbnail (if any) and ensure it meets Telegram limits
-    t_id = await db.get_thumbnail(user_id)
-    if not t_id:
-        return None
-    path = os.path.join(TMP_DIR, f"thumb_{user_id}.jpg")
-    try:
-        await client.download_media(t_id, file_name=path)
+    t_id = from io import BytesIO
+    bio = BytesIO()
+    await c.download_media(media, file_name=bio)
+    bio.name = new_filename
         # convert to JPEG, <= 320px, <= 200KB
         im = Image.open(path).convert("RGB")
         im.thumbnail((320, 320))
