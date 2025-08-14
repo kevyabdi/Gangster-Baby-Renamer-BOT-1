@@ -1,4 +1,4 @@
-fromfrom helper.utils import progress_for_pyrogram, convert
+from helper.utils import progress_for_pyrogram, convert
 from pyrogram import Client, filters
 from pyrogram.types import (  InlineKeyboardButton, InlineKeyboardMarkup,ForceReply)
 from hachoir.metadata import extractMetadata
@@ -64,108 +64,50 @@ async def doc(bot,update):
      else:
          caption = f"**{new_filename}**"
      if (media.thumbs or c_thumb):
-         try:
-             if c_thumb:
-                ph_path = await bot.download_media(c_thumb) 
-             else:
-                ph_path = await bot.download_media(media.thumbs[0].file_id)
-             # Fix thumbnail processing
-             with Image.open(ph_path) as img:
-                 img = img.convert("RGB")
-                 img = img.resize((320, 320))
-                 img.save(ph_path, "JPEG")
-         except Exception as e:
-             print(f"Thumbnail error: {e}")
-             ph_path = None
+         if c_thumb:
+            ph_path = await bot.download_media(c_thumb) 
+         else:
+            ph_path = await bot.download_media(media.thumbs[0].file_id)
+         Image.open(ph_path).convert("RGB").save(ph_path)
+         img = Image.open(ph_path)
+         img.resize((320, 320))
+         img.save(ph_path, "JPEG")
      await ms.edit("⚠️__**Please wait...**__\n__Processing file upload....__")
      c_time = time.time() 
-     
-     # Check if file exists before upload
-     if not os.path.exists(file_path):
-         await ms.edit(f"❌ File not found: {file_path}")
-         return
-         
-     file_size = os.path.getsize(file_path)
-     print(f"Starting upload - Type: {type}, File: {file_path}, Size: {file_size}")
-     
-     # Check file size limits (Telegram: 2GB for documents, 50MB for videos)
-     if type == "document" and file_size > 2 * 1024 * 1024 * 1024:  # 2GB
-         await ms.edit("❌ File too large! Maximum size for documents is 2GB.")
-         if os.path.exists(file_path):
-             os.remove(file_path)
-         if ph_path and os.path.exists(ph_path):
-             os.remove(ph_path)
-         return
-     elif type in ["video", "audio"] and file_size > 50 * 1024 * 1024:  # 50MB
-         await ms.edit(f"❌ File too large! Maximum size for {type} is 50MB.\n\n💡 Try sending as document instead.")
-         if os.path.exists(file_path):
-             os.remove(file_path)
-         if ph_path and os.path.exists(ph_path):
-             os.remove(ph_path)
-         return
-     
-     # Add timeout for upload based on file size
-     import asyncio
-     timeout_seconds = min(max(file_size // (1024 * 1024) * 30, 300), 3600)  # 30s per MB, min 5min, max 1hour
-     
      try:
-        upload_task = None
-        progress_text = f"⚠️__**Please wait...**__\n__Uploading {humanize.naturalsize(file_size)} file...__"
-        
         if type == "document":
-           print("Uploading as document...")
-           upload_task = bot.send_document(
+           await bot.send_document(
 		    update.message.chat.id,
                     document=file_path,
                     thumb=ph_path, 
                     caption=caption, 
                     progress=progress_for_pyrogram,
-                    progress_args=(progress_text, ms, c_time))
+                    progress_args=( "⚠️__**Please wait...**__\n__Processing file upload....__",  ms, c_time   ))
         elif type == "video": 
-            print("Uploading as video...")
-            upload_task = bot.send_video(
+            await bot.send_video(
 		    update.message.chat.id,
 		    video=file_path,
 		    caption=caption,
 		    thumb=ph_path,
 		    duration=duration,
 		    progress=progress_for_pyrogram,
-		    progress_args=(progress_text, ms, c_time))
+		    progress_args=( "⚠️__**Please wait...**__\n__Processing file upload....__",  ms, c_time))
         elif type == "audio": 
-            print("Uploading as audio...")
-            upload_task = bot.send_audio(
+            await bot.send_audio(
 		    update.message.chat.id,
 		    audio=file_path,
 		    caption=caption,
 		    thumb=ph_path,
 		    duration=duration,
 		    progress=progress_for_pyrogram,
-		    progress_args=(progress_text, ms, c_time))
-        
-        # Wait for upload with dynamic timeout
-        await asyncio.wait_for(upload_task, timeout=timeout_seconds)
-        print("Upload completed successfully!")
-        
-     except asyncio.TimeoutError:
-         await ms.edit(f"❌ Upload timeout after {timeout_seconds//60} minutes!\n\n💡 File might be too large or connection is slow.")
-         print(f"Upload timed out after {timeout_seconds} seconds")
-         if os.path.exists(file_path):
-             os.remove(file_path)
-         if ph_path and os.path.exists(ph_path):
-             os.remove(ph_path)
-         return
+		    progress_args=( "⚠️__**Please wait...**__\n__Processing file upload....__",  ms, c_time   )) 
      except Exception as e: 
-         error_msg = f"Upload Error: {str(e)}\n\nFile: {file_path}\nType: {type}\nSize: {humanize.naturalsize(file_size)}"
-         await ms.edit(error_msg) 
-         print(f"Upload failed: {e}")
-         print(f"Error details - File exists: {os.path.exists(file_path)}, Thumb exists: {ph_path and os.path.exists(ph_path) if ph_path else 'No thumb'}")
-         if os.path.exists(file_path):
-             os.remove(file_path)
-         if ph_path and os.path.exists(ph_path):
-             os.remove(ph_path)
+         await ms.edit(f" Erro {e}") 
+         os.remove(file_path)
+         if ph_path:
+           os.remove(ph_path)
          return 
      await ms.delete() 
-     if os.path.exists(file_path):
-        os.remove(file_path) 
-     if ph_path and os.path.exists(ph_path):
-        os.remove(ph_path)
+     os.remove(file_path) 
+     if ph_path:
+        os.remove(ph_path) 
